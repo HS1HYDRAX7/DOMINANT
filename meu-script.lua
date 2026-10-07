@@ -1,11 +1,11 @@
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/YOUR_USER/YOUR_REPO/main/vind-ui-modded/vindui.lua"))()
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/HS1HYDRAX7/DOMINANT/refs/heads/main/vind-ui/vind-ui.lua"))()
 
 local passed = UI:KeySystem({
 	Title = "My Script",
 	Subtitle = "Enter your key to continue",
 	Icon = "wind:key",
 	Theme = "Midnight",
-	Key = { "MY-KEY-1234" },
+	Key = { "1234" },
 	Services = {
 		{ Name = "Get key (Link 1)", Url = "https://example.com/key1" },
 		{ Name = "Get key (Link 2)", Url = "https://example.com/key2" },
