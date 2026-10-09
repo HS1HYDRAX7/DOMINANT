@@ -5,8 +5,8 @@ local M = {}
 M.games = {
     {
         name = "pressure",
-        gameIds = {},
-        placeIds = {},
+        gameIds = { 4367208330 },
+        placeIds = { 12411473842 },
         detect = function()
             return workspace:FindFirstChild("GameplayFolder") ~= nil
         end,
