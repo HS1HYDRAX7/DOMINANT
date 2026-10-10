@@ -1,0 +1,256 @@
+PROMPT PARA REESTRUTURAR O DOMINANT (repositório: HS1HYDRAX7/DOMINANT)
+
+Escreva o código, os comentários, os nomes de variáveis e as chaves em INGLÊS.
+Os textos visíveis ao usuário são traduções em português, inglês, espanhol e russo.
+Não escreva explicações no código. Não crie arquivos .md. Não gere tools/ nem dist/.
+
+===================================================================
+1. OBJETIVO
+===================================================================
+
+Refazer o repositório para ter:
+
+a) Todas as funções do script original Dominant (Forsaken), sem perda.
+b) Um loader único (loader.lua) que mostra a tela de loading.
+c) A tela final de loading acima da janela da Vind.
+d) Todas as features do Forsaken em UM ÚNICO arquivo, separadas por seção.
+e) Um repositório mínimo: o menor número possível de arquivos.
+
+===================================================================
+2. ESTRUTURA FINAL (somente estes arquivos)
+===================================================================
+
+  loader.lua                  entrada do script + tela de loading
+  core/base.lua               runtime: settings, hooks, loops, eventos, sessão, unload
+  core/ui.lua                 wrappers dos controles da Vind (rótulos são chaves de tradução)
+  core/app.lua                ordem de inicialização (jogo, key, janela, abas)
+  core/keysystem.lua          tela de key do Ophyn
+  core/vind.lua               carrega a Vind pela URL configurada
+  core/config.lua             constantes (título, keys, URLs, pastas)
+  core/modules.lua            carregador de módulos do repositório
+  shared/ui.lua               Home, Credits e Settings (idênticos em todos os jogos)
+  shared/strings.lua          todas as traduções compartilhadas (en, pt, es, ru)
+  shared/assets.lua           sistema de assets (imagens e sons)
+  assets/index.lua            manifesto de assets
+  assets/logo.png             logo
+  assets/sounds/*.mp3         notification, startup, success, error, critical
+  games/index.lua             registro e detecção dos jogos
+  games/forsaken/forsaken.lua TODAS as features do Forsaken, em um arquivo só
+  games/forsaken/strings.lua  traduções do Forsaken (en, pt, es, ru)
+  games/pressure/pressure.lua TODAS as features do Pressure, em um arquivo só
+  games/pressure/strings.lua  traduções do Pressure (en, pt, es, ru)
+
+Os módulos de movimento, tela, misc, fundo, sons e chat ficam dentro de
+shared/ui.lua ou de games/<jogo>/<jogo>.lua conforme o uso. Não deixe arquivos
+com uma única função.
+
+Remova: shared/chat.lua, shared/sounds.lua, shared/features/*, shared/strings_*
+(exceto shared/strings.lua), games/*/features/*, games/*/game.lua, games/*/init.lua,
+games/*/changelog.lua (o changelog vai dentro de games/<jogo>/<jogo>.lua).
+
+===================================================================
+3. LOADER (loader.lua)
+===================================================================
+
+3.1 Tela de loading
+- Estilo Ophyn, tema Dark (fundo preto, detalhes brancos, nada verde).
+- Sequência: quadrado com logo (80 px) -> cresce até 460x260 -> spinner -> status.
+- Cada etapa começa quando a anterior termina (Tween.Completed:Wait()).
+- Ao terminar, fade-out e destruição da ScreenGui.
+- A ScreenGui do loading precisa ficar ACIMA da Vind. A Vind usa
+  DisplayOrder = 9999 na sua ScreenGui principal. O loading deve usar
+  DisplayOrder maior que 9999 (ex.: 10000) enquanto estiver visível.
+- Enquanto a tela de key do Ophyn estiver aberta, o loading fica oculto
+  (gui.Enabled = false) e reaparece depois que a key for aceita.
+
+3.2 Idioma do loading
+- Lê Dominant/session_<GameId>.json (o mesmo arquivo do Settings).
+- Se não existir ou não tiver idioma, usa inglês (en).
+
+3.3 Robustez
+- Watchdog: se uma etapa ('modules', 'game', 'window') passar de 25 s sem
+  mudar, mostra o erro com motivo e botão "Tentar de novo".
+- Erros do pcall mostram a causa na tela (máximo 90 caracteres).
+- Botão de tentar de novo reinicia a sequência sem recriar a tela.
+- Antes de iniciar, descarrega a instância anterior (env.DominantInstance).
+
+3.4 Logo
+- Baixa assets/logo.png do repositório para Dominant/Assets/logo.png (uma vez)
+  e usa getcustomasset. Se não houver função de arquivo, usa o asset padrão.
+- O Ophyn recebe a logo como rbxassetid (ver 4.1). Nunca passe caminho
+  local (getcustomasset) para o Ophyn: o PreloadAsync dele trava.
+
+===================================================================
+4. CORREÇÕES OBRIGATÓRIAS (já descobertas)
+===================================================================
+
+4.1 Ophyn: o campo de key só aparece depois que PreloadAsync termina
+    (iconsPreloaded = true). Esse preload inclui o Logo. Por isso o Logo
+    do Ophyn tem que ser um rbxassetid (ex.: rbxassetid://116590139091461)
+    e nunca um caminho de arquivo local.
+
+4.2 Tema da key: config.KeyTheme = "Dark" (branco). Não usar "Plant-Dark".
+
+4.3 Vind:
+    - Window:SetBackground(options) aceita Image e Transparency. Não aceita
+      escala (Fit/Stretch): a imagem é sempre Crop.
+    - Não existe Window:ClearBackground. Para limpar use
+      Window:SetBackground({ Image = "" }).
+    - Window:SetBackgroundTransparency(n) existe.
+    - Confirm(opts) usa Title, Text, ConfirmText, CancelText, Danger, Window e
+      Callback(confirmed).
+    - Tab:AddKeybind(opts) usa Text, Description, Icon, Default e Callback(key, kind).
+      kind é "bind" (ao definir) ou "press" (ao pressionar).
+    - Tab:AddChangelogEntry(opts) usa Version, Date e Changes (lista de tabelas
+      com os campos Type e Text).
+    - Tab:AddCard(opts) usa UserId, Title, Description.
+    - Tab:AddSubTab(opts) cria subabas; opts tem Name e Icon.
+    - Tab:AddParagraph(opts) usa Title, Icon, Text e devolve objeto com .Instance.
+    Confira qualquer função nova em full_luau.txt antes de usar.
+
+4.4 Sincronização: use Tween.Completed:Wait() para encadear etapas, nunca
+    soma de task.wait().
+
+4.5 Não existe "Proton" na documentação pública que consegui acessar.
+    O chat usa um servidor relay (ver seção 7).
+
+===================================================================
+5. SETTINGS, HOME E CREDITS (shared/ui.lua)
+===================================================================
+
+Copie a estrutura do Dominant (Forsaken) original:
+
+Home: subaba "Info" (cartão com saudação, system info grid, boas-vindas,
+  status do executor e capacidades) e subaba "Changelog" (changelog do jogo
+  atual, cada jogo tem o seu).
+
+Credits: seções Dominant (Jonathan, Claude, Grok, Ana), Vind (Skinny, Shezz,
+  NoSkills, Luxy_00, Elusive), e avisos (Vind, Ophyn, disclaimer).
+
+Settings, nesta ordem:
+  1. Language (English, Português, Español, Русский)
+  2. Interface: notifications, sounds on/off, sound volume, background
+  3. Background: enable, file browser (dropdown), transparency, window transparency,
+     apply, clear, refresh. Sem escala.
+  4. Menu key (keybind)
+  5. Hotkeys (keybind para cada hotkey do jogo)
+  6. Configuration: nome da config, dropdown de configs, salvar, carregar,
+     apagar, autoload
+  7. Reset (confirm) e Unload (confirm)
+
+Settings é o único lugar com configs. Não criar Home/Settings em jogos.
+
+===================================================================
+6. FEATURES DO FORSAKEN (tudo deve existir)
+===================================================================
+
+6.1 Hooks do script original (69 chaves):
+  always_sprint, anim_changer, anti_afk, anti_slow, auto_disarm, auto_escape
+  auto_gen, auto_gen_remote, auto_pickup, auto_popups, auto_rejoin, bg_enabled
+  bg_scale, bg_transparency, bg_window_transparency, block_range_esp, cframe_speed, cframe_speed_value
+  chance_aimbot, click_tp, delete_ragdolls, disable_blindness, enable_jumping, esp
+  esp_tracers, fly, fly_speed, fov_on, fps_cap, fps_cap_on
+  fullbright, gen_all, gen_override_grid, goon, guest_charge_speed, guest_fling_punch
+  guest_punch_aim, hide_injury, hitbox_mod, hud, infinite_jump, infinite_stamina
+  instant_prompts, invincible, invisible, item_ring, jumppower, jumppower_on
+  kill_walls, killer_alert, laydown, name_protect, no_fall, no_fog
+  noclip, performance_mode, ring_radius, ring_speed, show_chat, sound_volume
+  spectate_killer, spin, spin_speed, sprint_speed_on, stamina_custom, stats_tracker
+  timed_hop, void_rush_control, zoom_on
+
+6.2 Chaves de configuração do script original (160 chaves):
+  alert_range, always_sprint, anim_changer, anti_afk, anti_slow, auto_disarm
+  auto_escape, auto_gen, auto_gen_remote, auto_parry, auto_pickup, auto_popups
+  auto_rejoin, bg_enabled, bg_path, bg_scale, bg_transparency, bg_window_transparency
+  cframe_speed, cframe_speed_value, chance_aimbot, chance_prediction, click_tp, color_chest
+  color_fake, color_generator, color_item, color_killer, color_pallet, color_support
+  color_survivor, color_trap, color_window, controllable_dash, custom_block_id, custom_block_on
+  custom_charge_id, custom_charge_on, custom_punch_id, custom_punch_on, delete_ragdolls, disable_blindness
+  drag_block, drag_hold, drag_stop, enable_jumping, escape_cooldown, esp
+  esp_chests, esp_distance, esp_fake, esp_fill, esp_generators, esp_health
+  esp_hide_done, esp_items, esp_killers, esp_max_distance, esp_outline_only, esp_pallets
+  esp_support, esp_survivors, esp_text, esp_text_size, esp_tracer_origin, esp_tracer_thickness
+  esp_tracers, esp_traps, esp_windows, fly, fly_speed, fov
+  fov_on, fps_cap, fps_cap_on, fullbright, gen_all, gen_all_interval
+  gen_all_reset, gen_cooldown, gen_grid, gen_loop_delay, gen_override_grid, gen_speedup
+  goon, guest_abh, guest_auto_punch, guest_block, guest_block_range, guest_block_tp
+  guest_charge_speed, guest_charge_speed_on, guest_edge_delay, guest_facing, guest_facing_check, guest_fling_power
+  guest_fling_punch, guest_predict_range, guest_predictive, guest_punch_aim, guest_punch_prediction, guest_punch_wait
+  guest_skip_special, guest_strict_range, guest_wallcheck, hide_injury, hitbox_mod, hitbox_range
+  hud, infinite_jump, infinite_stamina, instant_prompts, invincible, invisible
+  item_ring, jumppower, jumppower_on, key_cframe, key_esp, key_fly
+  key_invisible, key_noclip, key_panic, kill_walls, killer_alert, language
+  laydown, lms_song, menu_key, name_protect, no_fall, no_fog
+  no_footprints, no_trails, noclip, notifications, performance_mode, pickup_range
+  ring_radius, ring_speed, show_chat, small_spikes, sound_volume, spectate_killer
+  spin, spin_speed, sprint_speed, sprint_speed_on, stamina_custom, stamina_drain
+  stamina_max, stamina_regen, stats_tracker, timed_hop, timed_hop_minutes, void_rush_control
+  void_rush_speed, void_rush_steer, zoom, zoom_on
+
+6.3 Grupos do original que AINDA NÃO estão no repositório (portar todos):
+  - Combat: Feat.Combat (guest block, auto parry, auto punch, aimbot, hitbox)
+  - Automação de gerador: GenRemote, AllGens, Puzzle, Escape, Disarm, Popups
+  - Player: Stamina, SprintSpeed, Invisible, Invincible, VoidRush, Dash,
+    always_sprint, spin, no_fall, enable_jumping
+  - Visuals: Tracers, Privacy (esconder ferimento, cegueira), Tracker (estatísticas),
+    zoom, nome protegido, apagar ragdolls
+  - Fun: AnimChanger, Emotes, Anim (animações customizadas), Audio (LMS)
+  - World: pickup e spectate de jogador, collect items
+Use a função correspondente no arquivo original (Dominant__Forsaken_.lua)
+como fonte. Procure por "Feat.<Nome> = " para achar cada grupo.
+
+6.4 Tudo que já existe deve continuar funcionando. Confira cada hook da lista 6.1.
+
+===================================================================
+7. CHAT (Chat tab)
+===================================================================
+
+O Photon Chat é em tempo real (WebSocket). Não há API HTTP para clientes.
+Use um servidor relay próprio, alimentado por webhooks do Photon:
+
+  POST {api}/rooms                     -> { "code": "..." }
+  POST {api}/messages                  body { code, name, message }
+  GET  {api}/messages?code=&after=N    -> { "messages": [{ name, message }] }
+
+Campo "Chat server" (URL). Sala por código. Mensagens com Enter.
+Não invente o protocolo do Photon.
+
+===================================================================
+8. FEATURES DO PRESSURE
+===================================================================
+
+Manter as features atuais do Pressure, agora dentro de games/pressure/pressure.lua:
+ESP (monstros, jogadores, itens, moedas, keycards, portas de saída, armários,
+portas falsas, geradores), anti removals (27), automação (loot aura, instant
+prompts, open sesame, door yeet, entity alert), e as do Forsaken compartilhadas
+(movement, screen, misc).
+
+===================================================================
+9. REGRAS DE CÓDIGO
+===================================================================
+
+- Sem comentários no código final.
+- Sem variáveis globais (use local).
+- Cada função de feature tem um caminho "desligar" que desfaz o que ligou.
+- Qualquer objeto criado (Highlight, BillboardGui, BodyVelocity, conexões,
+  loops) é limpo em ctx.onUnload ou no hook de desligar.
+- Use pcall em tudo que toca objeto de jogo que pode não existir.
+- Rótulos e descrições são chaves de tradução: nunca texto fixo na interface
+  (exceto nomes próprios: nomes de monstros, itens e de pessoas).
+- Cada chave usada precisa existir nos 4 idiomas.
+- Blocos balanceados (function/if/do/repeat vs end/until).
+
+===================================================================
+10. CRITÉRIOS DE ACEITE
+===================================================================
+
+[ ] Lista de arquivos da seção 2 e nada além dela.
+[ ] Todos os hooks da seção 6.1 existem e ligam/desligam.
+[ ] Os grupos da seção 6.3 estão portados.
+[ ] Loading acima da Vind (DisplayOrder > 9999), tela oculta durante a key.
+[ ] Logo do Ophyn é rbxassetid; tema Dark; campo de key aparece.
+[ ] Idioma do loading vem do session_<GameId>.json; padrão en.
+[ ] Watchdog mostra erro e botão de tentar de novo.
+[ ] Settings, Home, Credits e Changelog conforme seção 5.
+[ ] Traduções nos 4 idiomas, sem chave faltando.
+[ ] Sem .md, sem tools/, sem dist/, sem comentários.
